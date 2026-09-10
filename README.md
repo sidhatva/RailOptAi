@@ -169,4 +169,3 @@ npm run dev
 # Build for production
 npm run build
 ```
->>>>>>> b60d085 (docs: add comprehensive README with Git workflow guide)
