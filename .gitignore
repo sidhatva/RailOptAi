@@ -30,8 +30,11 @@ backend/*.iml
 
 # Environment / Secrets — NEVER commit these
 .env
-.env.local
-.env.production
+.env.*
+!.env.example
+*.secret
+*.key
+application-local.properties
 backend/src/main/resources/application-local.properties
 backend/src/main/resources/application-prod.properties
 

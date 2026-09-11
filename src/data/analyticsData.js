@@ -24,12 +24,7 @@ export const machineUtilization = [
   { machine: "DTS Stabilizer", activeHours: 165, idleHours: 35, maintenanceHours: 20, targetPct: 85 }
 ];
 
-export const departmentWorkload = [
-  { name: "P-Way (Track Engineering)", value: 46, color: "#0284C7", tasksCount: 58 },
-  { name: "TRD (Electrical OHE)", value: 28, color: "#8B5CF6", tasksCount: 35 },
-  { name: "S&T (Signalling & Telecom)", value: 20, color: "#F59E0B", tasksCount: 26 },
-  { name: "Mechanical / Rolling Stock", value: 6, color: "#10B981", tasksCount: 8 }
-];
+// Note: departmentWorkload mock data was removed; real data is served live via GET /api/departments
 
 export const corridorPerformanceSummary = [
   {

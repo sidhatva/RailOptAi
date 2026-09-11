@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 /**
- * Simple health check endpoint.
+ * Health check endpoint.
  * Used by load balancers, Docker health checks, and monitoring tools.
  *
  * GET /api/health
@@ -21,7 +21,8 @@ public class HealthController {
     public ResponseEntity<Map<String, String>> health() {
         return ResponseEntity.ok(Map.of(
                 "status", "UP",
-                "application", "RailOpt AI Backend"
+                "database", "PostgreSQL",
+                "application", "RailOpt AI"
         ));
     }
 }

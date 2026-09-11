@@ -41,6 +41,12 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, ex.getMessage(), request.getRequestURI(), null);
     }
 
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResourceFound(
+            org.springframework.web.servlet.resource.NoResourceFoundException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_FOUND, "The requested endpoint does not exist: " + request.getRequestURI(), request.getRequestURI(), null);
+    }
+
     // ─── 409 Conflict ────────────────────────────────────────────────────────
 
     @ExceptionHandler(DuplicateResourceException.class)

@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { corridors } from '../data/corridorsData';
-import { trains } from '../data/trainsData';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { corridors as localCorridors } from '../data/corridorsData';
+import { trains as localTrains } from '../data/trainsData';
 import { maintenanceTasks as initialTasks } from '../data/maintenanceTasksData';
 import { railwayAssets as initialAssets } from '../data/assetsData';
 import { mockGeneratedBlockPlans } from '../data/blockPlansData';
 import { aiRecommendations as initialRecommendations } from '../data/recommendationsData';
+import { api, RailwayApiService } from '../services/api';
 
 export const USER_ROLES = [
   { id: 'CHIEF_CONTROLLER', title: 'Chief Controller (Operations)', dept: 'Operating', icon: 'ShieldCheck' },
@@ -31,7 +32,97 @@ export const RailwayProvider = ({ children }) => {
   const [assets, setAssets] = useState(initialAssets);
   const [blockPlans, setBlockPlans] = useState(mockGeneratedBlockPlans);
   const [recommendations, setRecommendations] = useState(initialRecommendations);
-  const [trainsList] = useState(trains);
+
+  // Backend-driven state
+  const [corridors, setCorridors] = useState(localCorridors);
+  const [trainsList, setTrainsList] = useState(localTrains);
+  const [departments, setDepartments] = useState([]);
+  const [backendOnline, setBackendOnline] = useState(true);
+
+  // Load all live data from Spring Boot backend on mount
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadAll = async () => {
+      // 1. Tasks
+      try {
+        const liveTasks = await api.maintenanceTasks.getAll();
+        if (!cancelled && Array.isArray(liveTasks) && liveTasks.length > 0) {
+          setTasks(liveTasks);
+        }
+      } catch (err) {
+        console.warn('[RailwayContext] Tasks fallback to local:', err.message);
+        if (!cancelled) setBackendOnline(false);
+      }
+
+      // 2. Departments
+      try {
+        const liveDepts = await api.departments.getAll();
+        if (!cancelled && Array.isArray(liveDepts) && liveDepts.length > 0) {
+          setDepartments(liveDepts);
+          setBackendOnline(true);
+        }
+      } catch (err) {
+        console.warn('[RailwayContext] Departments fallback:', err.message);
+      }
+
+      // 3. Corridors
+      try {
+        const liveCorridors = await RailwayApiService.getCorridors();
+        if (!cancelled && Array.isArray(liveCorridors) && liveCorridors.length > 0) {
+          // Normalize backend corridors to match frontend's expected shape
+          const normalized = liveCorridors.map(normalizeBackendCorridor);
+          setCorridors(normalized);
+        }
+      } catch (err) {
+        console.warn('[RailwayContext] Corridors fallback to local:', err.message);
+      }
+
+      // 4. Block Plans
+      try {
+        const livePlans = await RailwayApiService.getBlockPlans();
+        if (!cancelled && Array.isArray(livePlans) && livePlans.length > 0) {
+          setBlockPlans(livePlans);
+        }
+      } catch (err) {
+        console.warn('[RailwayContext] Block plans fallback to local:', err.message);
+      }
+
+      // 5. Assets
+      try {
+        const liveAssets = await RailwayApiService.getRailwayAssets();
+        if (!cancelled && Array.isArray(liveAssets) && liveAssets.length > 0) {
+          setAssets(liveAssets);
+        }
+      } catch (err) {
+        console.warn('[RailwayContext] Assets fallback to local:', err.message);
+      }
+    };
+
+    loadAll();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Load trains when corridor changes
+  useEffect(() => {
+    let cancelled = false;
+    const selectedCorridor = corridors.find(c => c.id === selectedCorridorId || c.corridorId === selectedCorridorId);
+    const backendCorridorId = selectedCorridor?.backendId;
+
+    RailwayApiService.getTrains(backendCorridorId)
+      .then(liveTrains => {
+        if (!cancelled && Array.isArray(liveTrains) && liveTrains.length > 0) {
+          setTrainsList(liveTrains);
+        }
+      })
+      .catch(err => {
+        console.warn('[RailwayContext] Trains fallback to local:', err.message);
+        if (!cancelled) {
+          setTrainsList(localTrains.filter(t => !selectedCorridorId || t.corridorId === selectedCorridorId));
+        }
+      });
+    return () => { cancelled = true; };
+  }, [selectedCorridorId, corridors]);
 
   // Stable IST Time helper
   const getIstTimeStr = () => {
@@ -57,21 +148,23 @@ export const RailwayProvider = ({ children }) => {
   const istTimeStr = getIstTimeStr();
   const istDateStr = getIstDateStr();
 
-  // Active Corridor
-  const selectedCorridor = corridors.find(c => c.id === selectedCorridorId) || corridors[0];
+  // Active Corridor — supports both local and backend corridor shapes
+  const selectedCorridor = corridors.find(c =>
+    c.id === selectedCorridorId || c.corridorId === selectedCorridorId
+  ) || corridors[0];
 
   // Toast Notification System
   const [toasts, setToasts] = useState([]);
-  const addToast = (message, type = 'info', duration = 4000) => {
+  const addToast = useCallback((message, type = 'info', duration = 4000) => {
     const id = Date.now() + Math.random();
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, duration);
-  };
+  }, []);
 
   // Switch Role
-  const switchRole = (roleId) => {
+  const switchRole = useCallback((roleId) => {
     const roleConfig = USER_ROLES.find(r => r.id === roleId) || USER_ROLES[0];
     setCurrentUser(prev => ({
       ...prev,
@@ -79,10 +172,10 @@ export const RailwayProvider = ({ children }) => {
       title: roleConfig.title
     }));
     addToast(`Switched active profile to ${roleConfig.title}`, 'info');
-  };
+  }, [addToast]);
 
   // Add a new maintenance task
-  const addTask = (newTask) => {
+  const addTask = useCallback((newTask) => {
     const taskWithId = {
       ...newTask,
       id: `TSK-NCR-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
@@ -93,10 +186,10 @@ export const RailwayProvider = ({ children }) => {
     setTasks(prev => [taskWithId, ...prev]);
     addToast(`Requisition ${taskWithId.id} registered successfully`, 'success');
     return taskWithId;
-  };
+  }, [currentUser.title, addToast]);
 
   // Approve a Block Plan
-  const approveBlockPlan = (planId) => {
+  const approveBlockPlan = useCallback((planId) => {
     setBlockPlans(prev => prev.map(plan => {
       if (plan.planId === planId) {
         return {
@@ -109,13 +202,14 @@ export const RailwayProvider = ({ children }) => {
       return plan;
     }));
     addToast(`Block Plan ${planId} approved & transmitted to COIS / FOIS`, 'success');
-  };
+  }, [currentUser.name, currentUser.title, istTimeStr, addToast]);
 
   // Add newly generated block plan
-  const addGeneratedBlockPlan = (newPlan) => {
+  const addGeneratedBlockPlan = useCallback((newPlan) => {
     setBlockPlans(prev => [newPlan, ...prev]);
-    addToast(`New AI Block Plan generated for ${newPlan.section}`, 'success');
-  };
+    const loc = newPlan.section || newPlan.corridorName || 'Corridor';
+    addToast(`New AI Block Plan generated for ${loc}`, 'success');
+  }, [addToast]);
 
   return (
     <RailwayContext.Provider
@@ -131,6 +225,8 @@ export const RailwayProvider = ({ children }) => {
         trains: trainsList,
         tasks,
         setTasks,
+        departments,
+        setDepartments,
         addTask,
         assets,
         setAssets,
@@ -142,13 +238,50 @@ export const RailwayProvider = ({ children }) => {
         istTimeStr,
         istDateStr,
         toasts,
-        addToast
+        addToast,
+        backendOnline
       }}
     >
       {children}
     </RailwayContext.Provider>
   );
 };
+
+/**
+ * Normalizes a backend Corridor DTO to match the frontend's local corridor shape.
+ * This allows the rest of the frontend to work unchanged.
+ */
+function normalizeBackendCorridor(c) {
+  return {
+    // keep both id formats so lookups work
+    id: c.corridorId || c.id,
+    corridorId: c.corridorId,
+    backendId: c.id,
+    name: c.name,
+    code: c.corridorId,
+    zone: c.zone,
+    division: c.division,
+    lengthKm: c.lengthKm,
+    tracks: (c.tracks || []).map(t => ({
+      id: t.trackCode,
+      name: t.trackName,
+      direction: t.direction,
+      status: t.status
+    })),
+    stations: (c.stations || []).map(s => ({
+      code: s.stationCode,
+      name: s.stationName,
+      km: s.km,
+      hasLoops: s.hasLoops,
+      maxSpeed: s.maxSpeed
+    })),
+    capacityUtilization: c.capacityUtilization,
+    dailyTrains: c.dailyTrains,
+    signaling: c.signaling,
+    traction: c.traction,
+    speedLimit: c.speedLimit
+  };
+}
 
 export const useRailway = () => {
   const context = useContext(RailwayContext);

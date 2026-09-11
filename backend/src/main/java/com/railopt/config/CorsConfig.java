@@ -22,31 +22,31 @@ public class CorsConfig {
     public CorsFilter corsFilter() {
         CorsConfiguration config = new CorsConfiguration();
 
-        // Allowed origins — add production domain here when deploying
+        // Allowed origins — dev servers across localhost and 127.0.0.1
         config.setAllowedOrigins(List.of(
-                "http://localhost:5173",   // Vite dev server
-                "http://localhost:3000"    // create-react-app (if used in future)
+                "http://localhost:5173",
+                "http://localhost:3000",
+                "http://localhost:5174",
+                "http://127.0.0.1:5173",
+                "http://127.0.0.1:3000",
+                "http://127.0.0.1:5174"
         ));
+        config.setAllowedOriginPatterns(List.of("*"));
 
         // Allowed HTTP methods
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
 
-        // Allowed headers — include Content-Type and Authorization for future JWT support
-        config.setAllowedHeaders(List.of(
-                "Content-Type",
-                "Authorization",
-                "Accept",
-                "X-Requested-With"
-        ));
+        // Allowed headers
+        config.setAllowedHeaders(List.of("*"));
 
-        // Allow cookies / credentials (needed for future session/JWT cookie auth)
+        // Allow cookies / credentials
         config.setAllowCredentials(true);
 
         // How long the browser caches preflight responses (1 hour)
         config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/api/**", config);
+        source.registerCorsConfiguration("/**", config);
 
         return new CorsFilter(source);
     }

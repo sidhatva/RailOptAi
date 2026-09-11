@@ -153,12 +153,52 @@ git checkout -b fix/rollback-investigation <commit-hash>
 
 ## 🚀 Getting Started Locally
 
-```bash
-# Clone the repository
-git clone https://github.com/sidhatva/RailOptAi.git
+### 1. Database (PostgreSQL 16 in Docker)
 
-# Navigate to project directory
-cd RailOptAi
+Before running the backend, start PostgreSQL using Docker Compose:
+
+```powershell
+# Copy example environment variables (optional, defaults are built-in)
+cp .env.example .env
+
+# Start PostgreSQL container in background
+docker compose up -d
+
+# Check PostgreSQL container status
+docker ps
+```
+
+To stop or reset PostgreSQL:
+```powershell
+# Stop PostgreSQL container
+docker compose down
+
+# Stop PostgreSQL and remove database volume (fresh start)
+docker compose down -v
+```
+
+### 2. Backend (Spring Boot 3 + PostgreSQL)
+
+```powershell
+# Navigate to backend directory
+cd backend
+
+# Run automated tests (uses isolated in-memory test DB, does not require Docker)
+mvn clean test
+
+# Start the Spring Boot backend
+mvn spring-boot:run
+```
+
+Once running, the backend connects to PostgreSQL at `jdbc:postgresql://localhost:5432/railopt` and exposes:
+- Health check: `http://localhost:8080/api/health`
+- REST APIs: `http://localhost:8080/api/departments`, `/api/corridors`, `/api/trains`, etc.
+
+### 3. Frontend (React + Vite)
+
+```powershell
+# Return to repository root
+cd ..
 
 # Install dependencies
 npm install
@@ -169,3 +209,4 @@ npm run dev
 # Build for production
 npm run build
 ```
+
