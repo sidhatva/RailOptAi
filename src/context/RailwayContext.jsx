@@ -27,15 +27,15 @@ export const RailwayProvider = ({ children }) => {
     avatar: '👨‍✈️'
   });
 
-  const [selectedCorridorId, setSelectedCorridorId] = useState('COR-NDLS-CNB');
-  const [tasks, setTasks] = useState(initialTasks);
-  const [assets, setAssets] = useState(initialAssets);
-  const [blockPlans, setBlockPlans] = useState(mockGeneratedBlockPlans);
-  const [recommendations, setRecommendations] = useState(initialRecommendations);
+  const [selectedCorridorId, setSelectedCorridorId] = useState('NDLS-CNB');
+  const [tasks, setTasks] = useState([]);
+  const [assets, setAssets] = useState([]);
+  const [blockPlans, setBlockPlans] = useState([]);
+  const [recommendations, setRecommendations] = useState([]);
 
   // Backend-driven state
-  const [corridors, setCorridors] = useState(localCorridors);
-  const [trainsList, setTrainsList] = useState(localTrains);
+  const [corridors, setCorridors] = useState([]);
+  const [trainsList, setTrainsList] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [backendOnline, setBackendOnline] = useState(true);
 
@@ -47,12 +47,15 @@ export const RailwayProvider = ({ children }) => {
       // 1. Tasks
       try {
         const liveTasks = await api.maintenanceTasks.getAll();
-        if (!cancelled && Array.isArray(liveTasks) && liveTasks.length > 0) {
-          setTasks(liveTasks);
+        if (!cancelled) {
+          setTasks(Array.isArray(liveTasks) && liveTasks.length > 0 ? liveTasks : initialTasks);
         }
       } catch (err) {
         console.warn('[RailwayContext] Tasks fallback to local:', err.message);
-        if (!cancelled) setBackendOnline(false);
+        if (!cancelled) {
+          setTasks(initialTasks);
+          setBackendOnline(false);
+        }
       }
 
       // 2. Departments
@@ -148,10 +151,9 @@ export const RailwayProvider = ({ children }) => {
   const istTimeStr = getIstTimeStr();
   const istDateStr = getIstDateStr();
 
-  // Active Corridor — supports both local and backend corridor shapes
   const selectedCorridor = corridors.find(c =>
     c.id === selectedCorridorId || c.corridorId === selectedCorridorId
-  ) || corridors[0];
+  ) || corridors[0] || localCorridors[0];
 
   // Toast Notification System
   const [toasts, setToasts] = useState([]);

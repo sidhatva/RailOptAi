@@ -1,25 +1,22 @@
 /**
  * RailOpt AI - Backend API Integration Layer
  * 
- * Configured for Spring Boot REST API at http://localhost:8080/api
- * via environment variable VITE_API_BASE_URL.
+ * Configured for Spring Boot REST API at /api
+ * via Vite reverse proxy (target: http://localhost:8080).
  */
 
 import { corridors } from '../data/corridorsData';
 import { trains } from '../data/trainsData';
 import { railwayAssets } from '../data/assetsData';
 import { mockGeneratedBlockPlans } from '../data/blockPlansData';
-import { runAiBlockOptimization } from './blockOptimizer';
 import { departmentService } from './departmentService';
 
 // Configuration
 export const API_CONFIG = {
   BASE_URL: import.meta.env.VITE_API_BASE_URL || '/api',
   PYTHON_AI_BASE_URL: import.meta.env.VITE_PYTHON_AI_URL || 'http://localhost:8000/api',
-  SIMULATED_NETWORK_LATENCY_MS: 300
+  SIMULATED_NETWORK_LATENCY_MS: 0
 };
-
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Reusable HTTP Request Client
@@ -73,10 +70,8 @@ export function normalizeTask(task) {
 
   return {
     ...task,
-    // ID mapping
     backendId: task.id,
     id: task.taskId || `TASK-${task.id}`,
-    // UI field mappings
     title: task.taskType ? `${task.taskType} - ${task.assetName || ''}` : (task.taskId || 'Maintenance Task'),
     section: task.location || 'NCR Main Line',
     track: task.location?.toUpperCase().includes('UP')
@@ -114,15 +109,12 @@ export function normalizeTask(task) {
  * Reusable API Client for Spring Boot Backend
  */
 export const api = {
-  // Health
   health: {
     check: () => request('/health')
   },
 
-  // Departments (Spring Boot REST API)
   departments: departmentService,
 
-  // Maintenance Tasks (Full CRUD)
   maintenanceTasks: {
     getAll: async () => {
       const list = await request('/maintenance-tasks');
@@ -167,8 +159,7 @@ export const api = {
 
 /**
  * RailwayApiService — Live backend integration layer.
- * All methods now call the Spring Boot REST API.
- * Local data files are kept as offline fallbacks (imported at top).
+ * All methods call Spring Boot REST APIs with resilient fallbacks.
  */
 export const RailwayApiService = {
   // ─── Departments (Live) ─────────────────────────────────────────────────
@@ -187,7 +178,7 @@ export const RailwayApiService = {
       const data = await request('/corridors');
       return Array.isArray(data) ? data : corridors;
     } catch {
-      console.warn('[RailwayApiService] getCorridors: backend unavailable, using local data');
+      console.warn('[RailwayApiService] getCorridors: backend offline, using local data');
       return corridors;
     }
   },
@@ -201,19 +192,26 @@ export const RailwayApiService = {
   },
 
   // ─── Trains (Live → backend /api/trains) ────────────────────────────────
-  async getTrains(corridorId) {
+  async getTrains(corridor) {
     try {
-      const url = corridorId ? `/trains?corridorId=${corridorId}` : '/trains';
+      let url = '/trains';
+      if (corridor) {
+        if (typeof corridor === 'number') {
+          url = `/trains?corridorId=${corridor}`;
+        } else {
+          url = `/trains?corridor=${encodeURIComponent(corridor)}`;
+        }
+      }
       const data = await request(url);
       return Array.isArray(data) ? data : trains;
     } catch {
-      console.warn('[RailwayApiService] getTrains: backend unavailable, using local data');
-      return trains.filter((t) => !corridorId || t.corridorId === corridorId);
+      console.warn('[RailwayApiService] getTrains: backend offline, using local data');
+      return trains.filter((t) => !corridor || t.corridorId === corridor || t.corridor === corridor);
     }
   },
 
-  async getTrainsByCorridor(corridorId) {
-    return RailwayApiService.getTrains(corridorId);
+  async getTrainsByCorridor(corridor) {
+    return RailwayApiService.getTrains(corridor);
   },
 
   // ─── Railway Assets (Live → backend /api/assets) ─────────────────────────
@@ -227,7 +225,7 @@ export const RailwayApiService = {
       const data = await request(url);
       return Array.isArray(data) ? data : railwayAssets;
     } catch {
-      console.warn('[RailwayApiService] getRailwayAssets: backend unavailable, using local data');
+      console.warn('[RailwayApiService] getRailwayAssets: backend offline, using local data');
       let results = [...railwayAssets];
       if (filters.corridorId) results = results.filter((a) => a.corridorId === filters.corridorId);
       if (filters.category) results = results.filter((a) => a.category === filters.category);
@@ -240,9 +238,9 @@ export const RailwayApiService = {
   async getDashboardSummary() {
     try {
       return await request('/dashboard/summary');
-    } catch {
-      console.warn('[RailwayApiService] getDashboardSummary: backend unavailable');
-      return null;
+    } catch (err) {
+      console.warn('[RailwayApiService] getDashboardSummary error:', err);
+      throw err;
     }
   },
 
@@ -253,20 +251,21 @@ export const RailwayApiService = {
         ? `/dashboard/corridor-timeline?corridorId=${corridorId}`
         : '/dashboard/corridor-timeline';
       return await request(url);
-    } catch {
-      console.warn('[RailwayApiService] getCorridorTimeline: backend unavailable');
+    } catch (err) {
+      console.warn('[RailwayApiService] getCorridorTimeline error:', err);
       return null;
     }
   },
 
   // ─── Conflicts (Live → /api/dashboard/conflicts) ─────────────────────────
-  async getConflicts() {
+  async getConflicts(corridorId) {
     try {
-      const data = await request('/dashboard/conflicts');
+      const url = corridorId ? `/dashboard/conflicts?corridorId=${corridorId}` : '/dashboard/conflicts';
+      const data = await request(url);
       return Array.isArray(data) ? data : [];
-    } catch {
-      console.warn('[RailwayApiService] getConflicts: backend unavailable');
-      return null;
+    } catch (err) {
+      console.warn('[RailwayApiService] getConflicts error:', err);
+      return [];
     }
   },
 
@@ -274,8 +273,8 @@ export const RailwayApiService = {
   async getMaintenanceWorkload() {
     try {
       return await request('/dashboard/maintenance-workload');
-    } catch {
-      console.warn('[RailwayApiService] getMaintenanceWorkload: backend unavailable');
+    } catch (err) {
+      console.warn('[RailwayApiService] getMaintenanceWorkload error:', err);
       return null;
     }
   },
@@ -286,7 +285,7 @@ export const RailwayApiService = {
       const data = await request('/ai/block-plans');
       return Array.isArray(data) ? data : mockGeneratedBlockPlans;
     } catch {
-      console.warn('[RailwayApiService] getBlockPlans: backend unavailable, using local data');
+      console.warn('[RailwayApiService] getBlockPlans: backend offline, using local data');
       return mockGeneratedBlockPlans;
     }
   },
@@ -297,42 +296,39 @@ export const RailwayApiService = {
       const data = await request('/block-requests');
       return Array.isArray(data) ? data : [];
     } catch {
-      console.warn('[RailwayApiService] getBlockRequests: backend unavailable');
+      console.warn('[RailwayApiService] getBlockRequests: backend offline');
       return [];
     }
   },
 
   // ─── Generate AI Block Plan (Live → POST /api/ai/block-plans/generate) ────
   async generateAiBlockPlan(params) {
-    try {
-      // Map frontend param shape → backend DTO shape
-      const body = {
-        corridorId: params.corridor?.corridorId || params.corridorId || 'COR-NDLS-CNB',
-        trackLine: params.trackLine || 'UP_MAIN',
-        date: params.date || new Date().toISOString().split('T')[0],
-        targetShift: params.targetShift || 'NIGHT',
-        departments: params.departments || ['PWAY', 'TRD', 'ST'],
-        requiredWindowHours: params.requiredWindowHours || 3.5,
-        maxDelayToleranceMinutes: params.maxDelayToleranceMinutes || params.maxDelayTolerance || 20,
-        allowShadowBlocks: params.allowShadowBlocks !== false,
-        selectedMachine: params.selectedMachine || null
-      };
-      const result = await request('/ai/block-plans/generate', {
-        method: 'POST',
-        body: JSON.stringify(body)
-      });
-      // Adapt backend DTO to match frontend PlanResultCard expectations
-      return normalizePlan(result);
-    } catch (err) {
-      console.error('[RailwayApiService] generateAiBlockPlan failed:', err);
-      throw err;
-    }
+    const deptMap = { P_WAY: 'PWAY', TRD_OHE: 'TRD', S_AND_T: 'ST', MECH: 'MECH' };
+    const rawDepts = params.departments || ['PWAY', 'TRD', 'ST'];
+    const normalizedDepts = rawDepts.map(d => deptMap[d] || d);
+
+    const body = {
+      corridorId: params.corridor?.code || params.corridor?.corridorId || params.corridorId || 'NDLS-CNB',
+      trackLine: params.trackLine || 'UP_MAIN',
+      date: params.date || new Date().toISOString().split('T')[0],
+      targetShift: params.targetShift || 'NIGHT',
+      departments: normalizedDepts,
+      requiredWindowHours: params.requiredWindowHours || 3.5,
+      maxDelayToleranceMinutes: params.maxDelayToleranceMinutes || params.maxDelayTolerance || 20,
+      allowShadowBlocks: params.allowShadowBlocks !== false,
+      selectedMachine: params.selectedMachine || null
+    };
+
+    const result = await request('/ai/block-plans/generate', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    });
+    return normalizePlan(result);
   },
 
   // ─── Approve Block Plan ───────────────────────────────────────────────────
   async approveAndDispatchPlan(planId, officerDetails) {
     try {
-      // Try to find and approve the backend plan
       const plans = await request('/ai/block-plans');
       const plan = Array.isArray(plans) ? plans.find((p) => p.planId === planId) : null;
       if (plan) {
@@ -342,7 +338,7 @@ export const RailwayApiService = {
         });
       }
     } catch {
-      // Continue even if backend approve fails — local state handles it
+      // Continue even if backend approve fails
     }
     return {
       success: true,
@@ -363,22 +359,24 @@ function normalizePlan(plan) {
   if (!plan) return null;
   return {
     planId: plan.planId,
-    corridorId: plan.corridorCode,
+    corridorId: plan.corridorCode || plan.corridorId,
     corridorName: plan.corridorName,
     trackLine: plan.trackLine,
     scheduledDate: plan.scheduledDate,
-    windowStart: plan.windowStart ? plan.windowStart + ' IST' : '01:45 IST',
-    windowEnd: plan.windowEnd ? plan.windowEnd + ' IST' : '05:15 IST',
+    windowStart: plan.windowStart ? (plan.windowStart.includes('IST') ? plan.windowStart : plan.windowStart + ' IST') : '01:00 IST',
+    windowEnd: plan.windowEnd ? (plan.windowEnd.includes('IST') ? plan.windowEnd : plan.windowEnd + ' IST') : '05:00 IST',
     durationHours: plan.durationHours || 3.5,
     optimizationScore: plan.optimizationScore || 90.0,
+    priority: plan.priority || 'CRITICAL',
+    recommendedAction: plan.recommendedAction || 'Approve and transmit block requisition to Section Controller & COIS.',
     status: plan.status || 'PROPOSED',
-    departments: plan.departments ? plan.departments.split(',') : ['PWAY'],
+    departments: plan.departments ? (Array.isArray(plan.departments) ? plan.departments : plan.departments.split(',')) : ['PWAY'],
     aiReasons: plan.aiReasons || [],
     affectedTrains: plan.affectedTrains || [],
     assignedTasks: plan.assignedTasks || [],
+    conflicts: plan.conflicts || [],
     approvedBy: plan.approvedBy,
     generatedAt: plan.generatedAt,
-    // Keep backend id for approve calls
     _backendId: plan.id
   };
 }

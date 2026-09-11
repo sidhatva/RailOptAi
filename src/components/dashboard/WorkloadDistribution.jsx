@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { TrendingUp, RotateCcw, AlertCircle, Loader2 } from 'lucide-react';
 import { getDepartments } from '../../services/departmentService';
+import { RailwayApiService } from '../../services/api';
 import { useRailway } from '../../context/RailwayContext';
 
 // Department color palette for visual hierarchy
@@ -14,6 +15,7 @@ const DEPARTMENT_COLORS = {
 
 export const WorkloadDistribution = () => {
   const [departments, setLocalDepartments] = useState([]);
+  const [workloadSummary, setWorkloadSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -25,6 +27,18 @@ export const WorkloadDistribution = () => {
     setLoading(true);
     setError(null);
     try {
+      // First try the comprehensive maintenance workload endpoint
+      const workloadData = await RailwayApiService.getMaintenanceWorkload();
+      if (workloadData && Array.isArray(workloadData.departments) && workloadData.departments.length > 0) {
+        setWorkloadSummary(workloadData);
+        setLocalDepartments(workloadData.departments);
+        if (setGlobalDepartments) {
+          setGlobalDepartments(workloadData.departments);
+        }
+        return;
+      }
+
+      // Fallback to department service
       const data = await getDepartments();
       const deptArray = Array.isArray(data) ? data : [];
       setLocalDepartments(deptArray);
@@ -32,8 +46,14 @@ export const WorkloadDistribution = () => {
         setGlobalDepartments(deptArray);
       }
     } catch (err) {
-      console.error('[WorkloadDistribution] Failed to fetch departments:', err);
-      setError(err.message || 'Unable to connect to backend service.');
+      console.warn('[WorkloadDistribution] Falling back to department service:', err);
+      try {
+        const data = await getDepartments();
+        const deptArray = Array.isArray(data) ? data : [];
+        setLocalDepartments(deptArray);
+      } catch (fallbackErr) {
+        setError(fallbackErr.message || 'Unable to connect to backend service.');
+      }
     } finally {
       setLoading(false);
     }
@@ -44,7 +64,13 @@ export const WorkloadDistribution = () => {
   }, [fetchDepartmentData]);
 
   // Total tasks across all departments
-  const totalTasks = departments.reduce((acc, d) => acc + (d.taskCount || 0), 0);
+  const totalTasks = workloadSummary?.totalTasks != null
+    ? workloadSummary.totalTasks
+    : departments.reduce((acc, d) => acc + (d.taskCount || 0), 0);
+
+  const totalHours = workloadSummary?.totalEstimatedHours != null
+    ? `${workloadSummary.totalEstimatedHours}h Estimated`
+    : null;
 
   return (
     <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0E1626] p-5 shadow-sm">
@@ -55,13 +81,13 @@ export const WorkloadDistribution = () => {
             Departmental Maintenance Workload
           </h4>
           <p className="text-[11px] text-slate-500 dark:text-slate-400">
-            Requisitions backlog & target block windows across departments
+            Dynamic task backlog & possession hours from PostgreSQL
           </p>
         </div>
         <div className="flex items-center gap-2">
           {!loading && !error && (
             <span className="text-xs font-mono text-slate-500">
-              {totalTasks} Tasks Active
+              {totalTasks} Tasks Active {totalHours ? `• ${totalHours}` : ''}
             </span>
           )}
           <button
@@ -80,7 +106,7 @@ export const WorkloadDistribution = () => {
         <div className="mt-4 space-y-3.5 py-2">
           <div className="flex items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400 py-4">
             <Loader2 className="w-4 h-4 animate-spin text-red-500" />
-            <span>Loading departments from backend...</span>
+            <span>Loading workload from backend...</span>
           </div>
           {[1, 2, 3, 4].map((n) => (
             <div key={n} className="space-y-1.5 animate-pulse">
@@ -138,12 +164,13 @@ export const WorkloadDistribution = () => {
           {departments.map((dept) => {
             const color = DEPARTMENT_COLORS[dept.code] || DEPARTMENT_COLORS.DEFAULT;
             const taskCount = dept.taskCount || 0;
-            const percentage = totalTasks > 0 ? Math.round((taskCount / totalTasks) * 100) : 0;
+            const percentage = dept.workloadPercent != null
+              ? Math.round(dept.workloadPercent)
+              : (totalTasks > 0 ? Math.round((taskCount / totalTasks) * 100) : 0);
 
             return (
               <div key={dept.id || dept.code} className="space-y-1">
                 <div className="flex items-center justify-between text-xs gap-2">
-                  {/* Left: Indicator, Name, Code, and Status */}
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span
                       className="w-2.5 h-2.5 rounded-full flex-shrink-0"
@@ -168,13 +195,11 @@ export const WorkloadDistribution = () => {
                     )}
                   </div>
 
-                  {/* Right: Task count & percentage */}
                   <span className="font-mono font-bold text-slate-900 dark:text-white flex-shrink-0">
-                    {percentage}% ({taskCount} {taskCount === 1 ? 'task' : 'tasks'})
+                    {percentage}% ({taskCount} {taskCount === 1 ? 'task' : 'tasks'}{dept.estimatedHours ? ` • ${dept.estimatedHours}h` : ''})
                   </span>
                 </div>
 
-                {/* Department Description */}
                 {dept.description && (
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 pl-4">
                     {dept.description}
@@ -186,7 +211,7 @@ export const WorkloadDistribution = () => {
                   <div
                     className="h-full rounded-full transition-all duration-500"
                     style={{
-                      width: `${percentage}%`,
+                      width: `${Math.min(100, Math.max(percentage, 4))}%`,
                       backgroundColor: color
                     }}
                   />
@@ -196,20 +221,6 @@ export const WorkloadDistribution = () => {
           })}
         </div>
       )}
-
-      {/* Summary Footer */}
-      <div className="mt-5 p-3 rounded-lg bg-slate-50 dark:bg-[#111A2E] border border-slate-200 dark:border-slate-800 text-xs flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-emerald-500" />
-          <span className="text-slate-600 dark:text-slate-300">
-            Shadow Bundling Efficiency: <strong className="text-emerald-500">+38% higher</strong>
-          </span>
-        </div>
-        <span className="text-[10px] font-mono text-slate-400 flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-          COIS Synchronized
-        </span>
-      </div>
     </div>
   );
 };

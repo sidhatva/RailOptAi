@@ -6,6 +6,7 @@ import com.railopt.entity.AiBlockPlan;
 import com.railopt.entity.BlockPlanStatus;
 import com.railopt.exception.ResourceNotFoundException;
 import com.railopt.repository.AiBlockPlanRepository;
+import com.railopt.service.ai.PriorityEngine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,7 +21,7 @@ import java.util.List;
 public class AiBlockPlanService {
 
     private final AiBlockPlanRepository blockPlanRepository;
-    private final MockAiOptimizationService optimizationService;
+    private final PriorityEngine priorityEngine;
 
     public List<AiBlockPlanResponse> getAllBlockPlans() {
         return blockPlanRepository.findAll().stream()
@@ -41,7 +42,7 @@ public class AiBlockPlanService {
 
     @Transactional
     public AiBlockPlanResponse generateBlockPlan(AiBlockPlanGenerateRequest request) {
-        return optimizationService.generatePlan(request);
+        return priorityEngine.optimizeBlockPlan(request);
     }
 
     @Transactional

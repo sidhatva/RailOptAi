@@ -17,19 +17,22 @@ public class TrainController {
 
     /**
      * GET /api/trains
-     * GET /api/trains?corridorId=1
+     * GET /api/trains?corridor=NDLS-CNB
      * GET /api/trains?corridorCode=NDLS-CNB
+     * GET /api/trains?corridorId=1
      */
     @GetMapping
     public ResponseEntity<List<TrainResponse>> getTrains(
-            @RequestParam(required = false) Long corridorId,
-            @RequestParam(required = false) String corridorCode) {
+            @RequestParam(required = false) String corridor,
+            @RequestParam(required = false) String corridorCode,
+            @RequestParam(required = false) Long corridorId) {
 
+        String code = corridor != null ? corridor : corridorCode;
+        if (code != null) {
+            return ResponseEntity.ok(trainService.getTrainsByCorridorCode(code));
+        }
         if (corridorId != null) {
             return ResponseEntity.ok(trainService.getTrainsByCorridor(corridorId));
-        }
-        if (corridorCode != null) {
-            return ResponseEntity.ok(trainService.getTrainsByCorridorCode(corridorCode));
         }
         return ResponseEntity.ok(trainService.getAllTrains());
     }

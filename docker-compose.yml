@@ -1,6 +1,9 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: railopt-postgres:16
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
     container_name: railopt-postgres
     restart: unless-stopped
     environment:
@@ -10,7 +13,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - railopt-postgres-data:/var/lib/postgresql/data
+      - railopt_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U railopt -d railopt"]
       interval: 10s
@@ -18,5 +21,4 @@ services:
       retries: 5
 
 volumes:
-  railopt-postgres-data:
-    name: railopt-postgres-data
+  railopt_postgres_data:

@@ -20,9 +20,18 @@ public class CorridorController {
         return ResponseEntity.ok(corridorService.getAllCorridors());
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<CorridorResponse> getCorridorById(@PathVariable Long id) {
-        return ResponseEntity.ok(corridorService.getCorridorById(id));
+    /**
+     * GET /api/corridors/{id} (e.g. /api/corridors/1)
+     * or GET /api/corridors/{code} (e.g. /api/corridors/NDLS-CNB)
+     */
+    @GetMapping("/{identifier}")
+    public ResponseEntity<CorridorResponse> getCorridorByIdOrCode(@PathVariable String identifier) {
+        try {
+            Long id = Long.parseLong(identifier);
+            return ResponseEntity.ok(corridorService.getCorridorById(id));
+        } catch (NumberFormatException e) {
+            return ResponseEntity.ok(corridorService.getCorridorByCode(identifier));
+        }
     }
 
     @GetMapping("/code/{corridorId}")

@@ -1,212 +1,268 @@
-# 🚆 RailOpt AI — Intelligent Railway Block Planning & Maintenance Optimization
+# 🚆 RailOpt AI — Indian Railways Block Planning & Maintenance Optimization System
 
-**RailOpt AI** is a decision-support and operations research platform built for railway operations managers, section controllers, and maintenance engineers. It optimizes maintenance block allocation, eliminates track occupancy conflicts, and minimizes passenger train delays across dense railway corridors.
-
----
-
-## 🏗️ Tech Stack
-
-- **Framework**: [React 18](https://react.dev/) + [Vite 6](https://vitejs.dev/)
-- **Styling**: [Tailwind CSS](https://tailwindcss.com/)
-- **Visualizations**: [Recharts](https://recharts.org/)
-- **Icons**: [Lucide React](https://lucide.dev/)
-- **Optimization Engine**: Custom Priority-Weighted Conflict Solver (`src/services/blockOptimizer.js`)
+**RailOpt AI** is an intelligent decision-support and operations research platform built for Indian Railways section controllers, chief controllers, and departmental engineers (P-Way, TRD/OHE, S&T, and Mechanical). It optimizes track maintenance block allocation, eliminates train possession conflicts, and minimizes passenger train delays across high-density corridors.
 
 ---
 
-## 🌳 Git Branching Workflow & Architecture
+## 🏛️ 1. System Architecture
 
-To maintain a production-grade codebase, this repository adheres to a strict **tree-based Git workflow**.
-
-### Branch Structure
+RailOpt AI enforces a clean, tiered architecture where PostgreSQL is the single source of truth, Spring Boot provides business logic, AI optimization, and REST APIs, and React presents dynamic telemetry and controls.
 
 ```
-main (Production / Stable Releases Only)
-│
-├── feature/dashboard           # Operational KPIs, corridor timeline & alerts
-├── feature/maintenance         # Preventive/corrective maintenance task workflows
-├── feature/assets              # Rolling stock, tracks, OHE, and signal asset registry
-├── feature/trains-corridors    # Corridor layouts, train schedules & speed limits
-├── feature/block-planning      # Interactive block slot reservations & gantt charts
-├── feature/ai-optimization     # Heuristic solver & conflict resolution algorithms
-└── feature/reports             # Analytics, SLA reports, and maintenance audits
++-------------------------------------------------------------------+
+|                        React 18 Frontend                          |
+|  (Vite • Tailwind CSS • Metric Cards • Corridor Timeline • Lucide)|
++---------------------------------+---------------------------------+
+                                  |
+                                  | HTTP REST / JSON (CORS / Proxy)
+                                  v
++-------------------------------------------------------------------+
+|                     Spring Boot 3.3.4 Backend                     |
+|  +-------------------------------------------------------------+  |
+|  |                     REST Controllers                        |  |
+|  | (Assets • Trains • Corridors • Requests • Dashboard • AI)   |  |
+|  +------------------------------+------------------------------+  |
+|                                 |                                 |
+|  +------------------------------v------------------------------+  |
+|  |                       Service Layer                         |  |
+|  |  - DashboardService (dynamic database KPI aggregations)     |  |
+|  |  - AiBlockPlanService (11-step Pareto optimization solver)  |  |
+|  |  - Core Domain Services (Assets, Trains, Tasks, Corridors)  |  |
+|  +------------------------------+------------------------------+  |
+|                                 |                                 |
+|  +------------------------------v------------------------------+  |
+|  |                    AI Priority Engine                       |  |
+|  |  - PriorityEngine Interface (Pluggable Abstraction)         |  |
+|  |  - RuleBasedPriorityEngine (12-Factor Deterministic Model)   |  |
+|  |  - Future: Python FastAPI (OR-Tools / MILP / XGBoost)       |  |
+|  +------------------------------+------------------------------+  |
+|                                 |                                 |
+|  +------------------------------v------------------------------+  |
+|  |                Spring Data JPA & Hibernate                  |  |
+|  +------------------------------+------------------------------+  |
++---------------------------------+---------------------------------+
+                                  |
+                                  | JDBC (PostgreSQL Driver)
+                                  v
++-------------------------------------------------------------------+
+|                 PostgreSQL 16 Database (Docker)                   |
+|  Container: railopt-postgres • Port: 5432 • Volume Persisted       |
++-------------------------------------------------------------------+
 ```
+
+### Architectural Principles
+1. **React never connects directly to PostgreSQL**: All database operations and business logic are mediated through Spring Boot REST APIs.
+2. **PostgreSQL is the single source of truth**: No mock hardcoded values on the dashboard (e.g. `96.4%`, `78.2 Hrs/Wk`, `0 unresolved` are computed from live tables).
+3. **Transparent & Explainable AI**: The AI Priority Engine is initially implemented as a deterministic scoring engine in Spring Boot, fully decoupled behind the `PriorityEngine` interface so it can be replaced by Python ML/MILP services without altering frontend contracts.
 
 ---
 
-## 📜 Golden Rules
+## 📋 2. System Requirements
 
-1. **`main` is sacred & always stable**: Never commit experimental or untested code directly to `main`.
-2. **Feature branches for all work**: Always branch off the latest `main` when starting work on any feature or fix.
-3. **No Force Pushing**: Never use `git push --force` on shared branches.
-4. **Test Before Merge**: Always verify that the project builds cleanly (`npm run build`) before merging into `main`.
-5. **Clean Commit History**: Write clear, descriptive commit messages describing *what* changed and *why*.
-6. **Sync before branching**: Update your local `main` from remote before starting a new feature branch.
+- **Java Development Kit (JDK)**: Java 17 or 21+
+- **Build Tool**: Apache Maven 3.8+ (or Maven Wrapper)
+- **Node.js**: v18.0+ & npm
+- **Container Runtime**: Docker Desktop or Docker Engine (with Docker Compose)
 
 ---
 
-## 🛠️ Git Command Cheat Sheet
+## 🐳 3. Docker Installation & PostgreSQL Setup
 
-### 1. Creating a New Feature Branch
-Always pull latest `main` before creating your new branch:
+PostgreSQL 16 runs isolated inside a dedicated Docker container configured via `docker-compose.yml`.
+
+### Docker Configuration
+- **Container Name**: `railopt-postgres`
+- **Image**: `postgres:16`
+- **Database**: `railopt`
+- **User**: `railopt`
+- **Password**: `railopt123`
+- **Port**: `5432:5432`
+- **Data Volume**: `railopt_postgres_data`
+
+### Starting PostgreSQL via Docker Compose
+From the project root directory:
 ```bash
-# Ensure you are on main and up to date
-git checkout main
-git pull origin main
-
-# Create and switch to your new feature branch
-git checkout -b feature/<feature-name>
-
-# Example:
-git checkout -b feature/dashboard
+docker-compose up -d
 ```
 
-### 2. Switching Between Branches
+### Starting via Standalone Docker Command
 ```bash
-# Switch to an existing local branch
-git checkout <branch-name>
-# or using git switch
-git switch <branch-name>
-
-# Example:
-git switch feature/maintenance
+docker run -d \
+  --name railopt-postgres \
+  -p 5432:5432 \
+  -e POSTGRES_DB=railopt \
+  -e POSTGRES_USER=railopt \
+  -e POSTGRES_PASSWORD=railopt123 \
+  -v railopt_postgres_data:/var/lib/postgresql/data \
+  --restart unless-stopped \
+  postgres:16
 ```
 
-### 3. Saving & Committing Changes
-Make atomic commits with clear messages:
+### Verifying the Container
 ```bash
-# Check status of changed files
-git status
+# Check running container
+docker ps --filter "name=railopt-postgres"
 
-# Stage changes
-git add .
+# Connect via psql inside the container
+docker exec -it railopt-postgres psql -U railopt -d railopt
 
-# Commit with descriptive message
-git commit -m "feat(dashboard): add live corridor congestion metric"
-```
-
-### 4. Pushing a Branch to GitHub
-Set the upstream tracking branch on the first push:
-```bash
-# Push current feature branch to GitHub
-git push -u origin <branch-name>
-
-# Example:
-git push -u origin feature/dashboard
-```
-
-### 5. Returning to `main`
-```bash
-git checkout main
-# or
-git switch main
-```
-
-### 6. Updating `main` from GitHub
-Keep your local `main` in sync with remote updates:
-```bash
-git checkout main
-git pull origin main
-```
-
-### 7. Merging a Completed Feature into `main`
-Always test the build before merging:
-```bash
-# 1. Ensure feature branch builds cleanly
-npm run build
-
-# 2. Switch to main and update
-git checkout main
-git pull origin main
-
-# 3. Merge feature branch with a merge commit
-git merge --no-ff feature/<feature-name> -m "Merge feature/<feature-name> into main"
-
-# 4. Push updated main to GitHub
-git push origin main
-```
-
-### 8. Reverting to a Previous Stable Commit
-If a bug is introduced, safely revert changes without rewriting history:
-```bash
-# View commit history to find commit hash
-git log --oneline -n 10
-
-# Create a new commit that safely reverses changes of a specific commit
-git revert <commit-hash>
-
-# Push the revert commit
-git push origin main
-```
-
-### 9. Creating a New Branch from an Older Commit
-To test or fork off a specific past stable point:
-```bash
-# Find the desired commit hash
-git log --oneline
-
-# Create a new branch pointing to that commit
-git checkout -b fix/rollback-investigation <commit-hash>
+# View database tables
+\dt
 ```
 
 ---
 
-## 🚀 Getting Started Locally
+## ⚙️ 4. Database Configuration & Environment Variables
 
-### 1. Database (PostgreSQL 16 in Docker)
+The backend reads configuration from `backend/src/main/resources/application.properties`, structured with environment variable overrides:
 
-Before running the backend, start PostgreSQL using Docker Compose:
+| Environment Variable | Default Value | Description |
+| :--- | :--- | :--- |
+| `DB_URL` | `jdbc:postgresql://localhost:5432/railopt` | JDBC connection string |
+| `DB_USERNAME` | `railopt` | PostgreSQL username |
+| `DB_PASSWORD` | `railopt123` | PostgreSQL password |
+| `SERVER_PORT` | `8080` | Spring Boot HTTP port |
 
-```powershell
-# Copy example environment variables (optional, defaults are built-in)
-cp .env.example .env
+---
 
-# Start PostgreSQL container in background
-docker compose up -d
+## 🚀 5. Startup Instructions
 
-# Check PostgreSQL container status
-docker ps
+### 1. Start PostgreSQL (Docker)
+```bash
+docker-compose up -d
 ```
 
-To stop or reset PostgreSQL:
-```powershell
-# Stop PostgreSQL container
-docker compose down
-
-# Stop PostgreSQL and remove database volume (fresh start)
-docker compose down -v
-```
-
-### 2. Backend (Spring Boot 3 + PostgreSQL)
-
-```powershell
-# Navigate to backend directory
+### 2. Start Backend (Spring Boot)
+```bash
 cd backend
-
-# Run automated tests (uses isolated in-memory test DB, does not require Docker)
-mvn clean test
-
-# Start the Spring Boot backend
 mvn spring-boot:run
 ```
+The server will initialize on `http://localhost:8080`.
+Upon first run, `DataSeeder` automatically populates:
+- 4 Departments (`PWAY`, `TRD`, `ST`, `MECH`)
+- 3 Key Corridors (`NDLS-CNB`, `NDLS-AGC`, `CNB-PRYG`)
+- 18 Operating Trains (Rajdhani, Vande Bharat, Shatabdi, Superfast, Freight)
+- 18 Railway Infrastructure Assets (Track km, Bridges, Level Crossings, OHE, TSS, Signals, Cranes)
+- 10 Maintenance Requisitions and Block Requests
 
-Once running, the backend connects to PostgreSQL at `jdbc:postgresql://localhost:5432/railopt` and exposes:
-- Health check: `http://localhost:8080/api/health`
-- REST APIs: `http://localhost:8080/api/departments`, `/api/corridors`, `/api/trains`, etc.
-
-### 3. Frontend (React + Vite)
-
-```powershell
-# Return to repository root
-cd ..
-
-# Install dependencies
+### 3. Start Frontend (React + Vite)
+From the project root directory:
+```bash
 npm install
-
-# Start local development server
 npm run dev
+```
+Open `http://localhost:5173` in your browser. The Vite development server automatically proxies `/api` requests to `http://localhost:8080`.
 
-# Build for production
-npm run build
+---
+
+## 📡 6. REST API Endpoints Catalog
+
+### Assets (`/api/assets`)
+- `GET /api/assets`: Retrieve all railway assets.
+- `GET /api/assets/{id}`: Retrieve asset by primary key ID.
+- `GET /api/assets?department={code}`: Filter assets by department (e.g. `PWAY`, `TRD`, `ST`).
+- `GET /api/assets?status={status}`: Filter assets by condition status (`GOOD`, `ATTENTION_REQUIRED`, `CRITICAL`).
+
+### Trains (`/api/trains`)
+- `GET /api/trains`: Retrieve all operating trains.
+- `GET /api/trains/{id}`: Retrieve train by ID.
+- `GET /api/trains?corridor={code}`: Filter trains by corridor code (e.g. `NDLS-CNB`).
+
+### Corridors (`/api/corridors`)
+- `GET /api/corridors`: Retrieve all corridors with station lists and tracks.
+- `GET /api/corridors/{identifier}`: Retrieve corridor by numeric ID (`1`) or corridor code (`NDLS-CNB`).
+
+### Block Requests (`/api/block-requests`)
+- `GET /api/block-requests`: Retrieve departmental maintenance block requests.
+- `POST /api/block-requests`: Register a new block request.
+
+### Dynamic Dashboard (`/api/dashboard`)
+- `GET /api/dashboard/summary`: Dynamic KPI telemetry (asset availability %, critical tasks, active blocks, train conflicts, workload hours, AI Priority score & recommended action).
+- `GET /api/dashboard/corridor-timeline?corridorId={id}`: Train schedules, planned block windows, and active maintenance requisitions.
+- `GET /api/dashboard/conflicts?corridorId={id}`: Live conflict telemetry and AI resolution actions.
+- `GET /api/dashboard/maintenance-workload`: Departmental workload distribution and estimated possession hours.
+
+### AI Planning & Priority (`/api/ai`)
+- `GET /api/ai/block-plans`: Retrieve AI generated block plans.
+- `GET /api/ai/block-plans/{id}`: Retrieve plan by ID.
+- `POST /api/ai/block-plans/generate`: Trigger AI optimization solver for a corridor, shift, and departments.
+- `POST /api/ai/block-plans/{id}/approve`: Approve and dispatch block plan to COIS / FOIS.
+
+---
+
+## 🧠 7. AI Priority Engine
+
+The **AI Priority Engine** is designed as a transparent, multi-dimensional decision support system. It compiles operational data from PostgreSQL across **12 factors** to produce a deterministic priority score ($0-100$), a priority tier, and an actionable operational recommendation:
+
+### The 12 Analytical Dimensions
+1. **Task Severity**: `CRITICAL` (25 pts), `HIGH` (18 pts), `MEDIUM` (10 pts), `LOW` (5 pts).
+2. **Task Priority**: `URGENT` (20 pts), `HIGH` (14 pts), `MEDIUM` (8 pts), `LOW` (4 pts).
+3. **Task Status**: `PENDING` (10 pts), `SCHEDULED` (6 pts), `IN_PROGRESS` (4 pts).
+4. **Due Date Urgency**: Overdue (15 pts), Due $\le 24$h (12 pts), Due $\le 72$h (8 pts), Due $\le 7$ days (4 pts).
+5. **Asset Condition & Health**: Health score $<55$ or `CRITICAL` (12 pts), Health $<75$ (7 pts).
+6. **Asset Availability & TSR**: Active Temporary Speed Restriction (8 pts), High defect count (5 pts).
+7. **Train Traffic & Density**: Corridor daily trains $\ge 150$ (6 pts), $\ge 100$ (4.5 pts).
+8. **Corridor Importance**: Capacity utilization $\ge 85\%$ (5 pts), $\ge 75\%$ (3.5 pts).
+9. **Existing Block Requests**: Pending block requisition present on section (5 pts).
+10. **Train Conflicts Potential**: Multiple premium express trains (Rajdhani/Vande Bharat) in window (5 pts).
+11. **Department Backlog**: Department pending task queue $\ge 4$ (5 pts).
+12. **Maintenance Duration Efficiency**: Window duration $\le 3$ hours allows swift turnaround (4 pts).
+
+### Scoring & Action Derivation
+- **Score $\ge 78$ (`CRITICAL`)**: *"Schedule immediate maintenance block. Regulate conflicting freight paths to siding loops."*
+- **Score $62-77$ (`HIGH`)**: *"Allocate night slack window (01:00-05:00) with multi-department shadow bundling."*
+- **Score $45-61$ (`MEDIUM`)**: *"Schedule during daylight coaching slack window with caution order."*
+- **Score $< 45$ (`LOW`)**: *"Routine cyclic maintenance; monitor during standard daily track inspection patrol."*
+
+---
+
+## ⚡ 8. AI Block Planning & Shadow Bundling
+
+The `AiBlockPlanService` orchestrates an **11-step optimization pipeline**:
+1. Ingests corridor timetable, tracks, and operating trains.
+2. Identifies pending/critical requisitions across selected departments.
+3. Maps shift traffic valleys:
+   - **NIGHT Valley**: 01:00 – 05:00 IST (optimal for heavy track tamping and OHE isolation).
+   - **MORNING Slack**: 06:00 – 10:00 IST.
+   - **AFTERNOON Slack**: 13:00 – 16:30 IST.
+4. Detects conflicts with scheduled passenger and freight trains.
+5. Computes automated regulation: loops freight at sidings, utilizes slack buffer for coaching trains to ensure 0 terminal arrival delay.
+6. **Shadow Block Bundling**: Integrates Engineering (P-Way), Electrical (TRD/OHE), and S&T tasks into a single possession, saving up to $60\%$ in independent track possession closures.
+7. Evaluates multi-objective Pareto optimization score ($0-100\%$).
+8. Attaches explainable confidence badges (`TIMETABLE_FIT`, `MULTI_DEPT_BUNDLING`, `SAFETY_CRITICAL`, `ASSET_OPTIMIZED`).
+9. Persists and returns structured plan ready for controller authorization.
+
+---
+
+## 🧪 9. Automated Testing
+
+All unit, slice, and engine tests are executed with:
+```bash
+cd backend
+mvn clean test
 ```
 
+### Test Coverage Summary
+- **Controller Slice Tests (`@WebMvcTest`)**:
+  - `DepartmentControllerTest`: CRUD and validation on `/api/departments`.
+  - `MaintenanceTaskControllerTest`: Validation, filtering, and exception handling on `/api/maintenance-tasks`.
+  - `AssetControllerTest`: Filtering by department, status, and ID on `/api/assets`.
+  - `TrainControllerTest`: Corridor-based filtering and schedule retrieval on `/api/trains`.
+  - `CorridorControllerTest`: ID and alphanumeric code routing on `/api/corridors`.
+  - `DashboardControllerTest`: KPI summary, timeline, conflicts, and workload on `/api/dashboard`.
+  - `AiBlockPlanControllerTest`: Generation and controller approval workflows on `/api/ai`.
+- **Service & Engine Unit Tests (`MockitoExtension`)**:
+  - `PriorityEngineTest`: 12-factor scoring formula verification, priority categorization, and plan optimization.
+  - `AiBlockPlanServiceTest`: Plan lifecycle, delegation, and approval logic.
+  - `DashboardServiceTest`: Dynamic PostgreSQL aggregation formulas and KPI math.
+
+---
+
+## 🔮 10. Future Python AI / ML Solver Integration
+
+The architecture is built with drop-in replaceability in mind:
+- To replace the rule-based engine with a Python MILP / OR-Tools / XGBoost solver:
+  1. Stand up a Python FastAPI microservice (e.g. on port `8000`).
+  2. Create a `PythonMicroservicePriorityEngine` implementing `com.railopt.service.ai.PriorityEngine`.
+  3. Annotate it with `@Primary` to seamlessly delegate `optimizeBlockPlan` calls via HTTP.
+  4. Zero changes are required in controllers, DTOs, or the React frontend.

@@ -27,7 +27,7 @@ public class DashboardController {
     /**
      * GET /api/dashboard/corridor-timeline
      * GET /api/dashboard/corridor-timeline?corridorId=1
-     * Train paths and block windows for the CorridorTimeline component.
+     * Train paths, block windows, and relevant maintenance requests for the CorridorTimeline component.
      */
     @GetMapping("/corridor-timeline")
     public ResponseEntity<CorridorTimelineResponse> getCorridorTimeline(
@@ -37,11 +37,13 @@ public class DashboardController {
 
     /**
      * GET /api/dashboard/conflicts
+     * GET /api/dashboard/conflicts?corridorId=1
      * Live conflict telemetry for the ConflictAlerts component.
      */
     @GetMapping("/conflicts")
-    public ResponseEntity<List<ConflictResponse>> getConflicts() {
-        return ResponseEntity.ok(dashboardService.getConflicts());
+    public ResponseEntity<List<ConflictResponse>> getConflicts(
+            @RequestParam(required = false) Long corridorId) {
+        return ResponseEntity.ok(dashboardService.getConflicts(corridorId));
     }
 
     /**

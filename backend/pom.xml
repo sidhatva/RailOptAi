@@ -51,13 +51,6 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- H2 In-Memory Database (test scope only - removed from runtime) -->
-        <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <scope>test</scope>
-        </dependency>
-
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>

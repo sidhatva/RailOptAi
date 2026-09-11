@@ -42,6 +42,11 @@ public class AiBlockPlanResponse {
     /** Parsed assigned tasks from JSON */
     private List<Map<String, Object>> assignedTasks;
 
+    /** Priority evaluation and recommended action */
+    private String priority;
+    private String recommendedAction;
+    private List<ConflictResponse> conflicts;
+
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     public static AiBlockPlanResponse from(AiBlockPlan p) {
@@ -68,6 +73,8 @@ public class AiBlockPlanResponse {
                 .aiReasons(reasons)
                 .affectedTrains(trains)
                 .assignedTasks(tasks)
+                .priority(p.getOptimizationScore() != null && p.getOptimizationScore() >= 85.0 ? "CRITICAL" : "HIGH")
+                .recommendedAction("Approve and transmit block requisition to Section Controller & COIS.")
                 .build();
     }
 

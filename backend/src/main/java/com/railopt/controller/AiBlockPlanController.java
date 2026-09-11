@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/ai/block-plans")
+@RequestMapping("/api/ai")
 @RequiredArgsConstructor
 public class AiBlockPlanController {
 
@@ -23,7 +23,7 @@ public class AiBlockPlanController {
      * GET /api/ai/block-plans
      * GET /api/ai/block-plans?status=PROPOSED
      */
-    @GetMapping
+    @GetMapping("/block-plans")
     public ResponseEntity<List<AiBlockPlanResponse>> getBlockPlans(
             @RequestParam(required = false) String status) {
         if (status != null) {
@@ -32,16 +32,16 @@ public class AiBlockPlanController {
         return ResponseEntity.ok(aiBlockPlanService.getAllBlockPlans());
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/block-plans/{id}")
     public ResponseEntity<AiBlockPlanResponse> getBlockPlanById(@PathVariable Long id) {
         return ResponseEntity.ok(aiBlockPlanService.getBlockPlanById(id));
     }
 
     /**
      * POST /api/ai/block-plans/generate
-     * Triggers the mock AI optimization engine to generate a block plan.
+     * Triggers the AI Priority Engine to generate an optimal block plan.
      */
-    @PostMapping("/generate")
+    @PostMapping("/block-plans/generate")
     public ResponseEntity<AiBlockPlanResponse> generateBlockPlan(
             @Valid @RequestBody AiBlockPlanGenerateRequest request) {
         AiBlockPlanResponse response = aiBlockPlanService.generateBlockPlan(request);
@@ -51,7 +51,7 @@ public class AiBlockPlanController {
     /**
      * POST /api/ai/block-plans/{id}/approve
      */
-    @PostMapping("/{id}/approve")
+    @PostMapping("/block-plans/{id}/approve")
     public ResponseEntity<AiBlockPlanResponse> approveBlockPlan(
             @PathVariable Long id,
             @RequestBody(required = false) Map<String, String> body) {

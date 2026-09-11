@@ -1,16 +1,20 @@
 package com.railopt.dto;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.util.List;
 
 /**
  * Corridor timeline data for the dashboard CorridorTimeline component.
- * Contains active trains and maintenance blocks for graphical rendering.
+ * Contains active trains, maintenance blocks, and relevant maintenance requests.
  */
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class CorridorTimelineResponse {
 
     private Long corridorId;
@@ -23,8 +27,13 @@ public class CorridorTimelineResponse {
     /** Maintenance block windows */
     private List<BlockEntry> blocks;
 
+    /** Relevant maintenance requests */
+    private List<MaintenanceRequestEntry> maintenanceRequests;
+
     @Data
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class TrainEntry {
         private String trainNumber;
         private String trainName;
@@ -41,6 +50,8 @@ public class CorridorTimelineResponse {
 
     @Data
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class BlockEntry {
         private String planId;
         private String windowStart;
@@ -50,5 +61,21 @@ public class CorridorTimelineResponse {
         private String departments;
         private String status;
         private Double optimizationScore;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class MaintenanceRequestEntry {
+        private Long id;
+        private String taskId;
+        private String departmentCode;
+        private String assetName;
+        private String taskType;
+        private String priority;
+        private String severity;
+        private String status;
+        private Integer durationMinutes;
     }
 }
